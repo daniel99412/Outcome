@@ -1,4 +1,4 @@
-package dev.daniel.outcome;
+package io.github.daniel99412.outcome;
 
 import org.junit.jupiter.api.Test;
 

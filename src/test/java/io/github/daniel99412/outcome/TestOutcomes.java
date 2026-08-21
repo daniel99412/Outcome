@@ -1,8 +1,8 @@
-package dev.daniel.outcome;
+package io.github.daniel99412.outcome;
 
-import dev.daniel.outcome.error.Error;
-import dev.daniel.outcome.error.ErrorType;
-import dev.daniel.outcome.error.Errors;
+import io.github.daniel99412.outcome.error.Error;
+import io.github.daniel99412.outcome.error.ErrorType;
+import io.github.daniel99412.outcome.error.Errors;
 
 import java.util.Arrays;
 import java.util.List;

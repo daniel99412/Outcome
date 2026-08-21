@@ -1,4 +1,4 @@
-package dev.daniel.outcome.error;
+package io.github.daniel99412.outcome.error;
 
 /**
  * The category of an {@link Error}.

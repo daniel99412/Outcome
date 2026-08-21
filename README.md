@@ -25,13 +25,13 @@ dependency once published, or include the sources directly:
 
 ```groovy
 // Gradle
-implementation 'dev.daniel.outcome:outcome:1.0.0'
+implementation 'io.github.daniel99412:outcome:1.0.0'
 ```
 
 ```xml
 <!-- Maven -->
 <dependency>
-    <groupId>dev.daniel.outcome</groupId>
+    <groupId>io.github.daniel99412</groupId>
     <artifactId>outcome</artifactId>
     <version>1.0.0</version>
 </dependency>
@@ -40,10 +40,10 @@ implementation 'dev.daniel.outcome:outcome:1.0.0'
 ## Quick example
 
 ```java
-import dev.daniel.outcome.Outcome;
-import dev.daniel.outcome.Success;
-import dev.daniel.outcome.error.Error;
-import dev.daniel.outcome.error.ErrorType;
+import io.github.daniel99412.outcome.Outcome;
+import io.github.daniel99412.outcome.Success;
+import io.github.daniel99412.outcome.error.Error;
+import io.github.daniel99412.outcome.error.ErrorType;
 
 Outcome<String> result = lookupUser("ada")
         .map(user -> user.displayName())
