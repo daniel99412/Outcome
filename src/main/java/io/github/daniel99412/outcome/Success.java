@@ -1,7 +1,7 @@
 package io.github.daniel99412.outcome;
 
-import io.github.daniel99412.outcome.error.Error;
-import io.github.daniel99412.outcome.error.Errors;
+import io.github.daniel99412.outcome.problem.Problem;
+import io.github.daniel99412.outcome.problem.Problems;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -12,8 +12,8 @@ import java.util.function.Function;
  * <p>
  * A {@code Success} always carries a non-null value. It executes the success
  * operations ({@code map}, {@code flatMap}, {@code fold} success branch,
- * {@code peek}) and ignores the failure operations ({@code mapError},
- * {@code peekError}, {@code recover}, {@code recoverWith}).
+ * {@code peek}) and ignores the failure operations ({@code mapProblem},
+ * {@code peekProblem}, {@code recover}, {@code recoverWith}).
  *
  * @param <T> the type of the value
  * @param value the successful value; must not be null
@@ -44,7 +44,7 @@ public record Success<T>(T value) implements Outcome<T> {
     }
 
     @Override
-    public Outcome<T> mapError(Function<? super Error, ? extends Error> mapper) {
+    public Outcome<T> mapProblem(Function<? super Problem, ? extends Problem> mapper) {
         Objects.requireNonNull(mapper, "mapper cannot be null");
         return this;
     }
@@ -52,7 +52,7 @@ public record Success<T>(T value) implements Outcome<T> {
     @Override
     public <R> R fold(
             Function<? super T, ? extends R> onSuccess,
-            Function<? super Errors, ? extends R> onFailure) {
+            Function<? super Problems, ? extends R> onFailure) {
         Objects.requireNonNull(onSuccess, "onSuccess cannot be null");
         Objects.requireNonNull(onFailure, "onFailure cannot be null");
         return onSuccess.apply(value);
@@ -66,19 +66,19 @@ public record Success<T>(T value) implements Outcome<T> {
     }
 
     @Override
-    public Outcome<T> peekError(Consumer<? super Errors> action) {
+    public Outcome<T> peekProblem(Consumer<? super Problems> action) {
         Objects.requireNonNull(action, "action cannot be null");
         return this;
     }
 
     @Override
-    public Outcome<T> recover(Function<? super Errors, ? extends T> recovery) {
+    public Outcome<T> recover(Function<? super Problems, ? extends T> recovery) {
         Objects.requireNonNull(recovery, "recovery cannot be null");
         return this;
     }
 
     @Override
-    public Outcome<T> recoverWith(Function<? super Errors, ? extends Outcome<T>> recovery) {
+    public Outcome<T> recoverWith(Function<? super Problems, ? extends Outcome<T>> recovery) {
         Objects.requireNonNull(recovery, "recovery cannot be null");
         return this;
     }

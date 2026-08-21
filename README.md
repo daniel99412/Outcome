@@ -10,7 +10,7 @@ Outcome<T>
 ├── Success<T>
 │   └── value          (non-null)
 └── Failure<T>
-    └── Errors         (1..N Error)
+    └── Problems         (1..N Problem)
 ```
 
 It is deliberately small. It is **not** a replacement for
@@ -42,12 +42,12 @@ implementation 'io.github.daniel99412:outcome:1.0.0'
 ```java
 import io.github.daniel99412.outcome.Outcome;
 import io.github.daniel99412.outcome.Success;
-import io.github.daniel99412.outcome.error.Error;
-import io.github.daniel99412.outcome.error.ErrorType;
+import io.github.daniel99412.outcome.problem.Problem;
+import io.github.daniel99412.outcome.problem.ProblemType;
 
 Outcome<String> result = lookupUser("ada")
         .map(user -> user.displayName())
-        .recover(errors -> "unknown user");
+        .recover(problems -> "unknown user");
 ```
 
 ## Core semantics
@@ -58,10 +58,10 @@ The two halves of `Outcome` behave as strict counterparts:
 |------------------|---------------------------------------------|------------------------------------------------|
 | `map`            | transforms the value                        | returns `this`; mapper **not** executed        |
 | `flatMap`        | chains the returned outcome                 | returns `this`; mapper **not** executed        |
-| `mapError`       | returns `this`; mapper **not** executed     | transforms **every** error                     |
+| `mapProblem`       | returns `this`; mapper **not** executed     | transforms **every** problem                     |
 | `fold`           | runs the success branch                     | runs the failure branch                        |
 | `peek`           | runs the action                             | returns `this`; action **not** executed        |
-| `peekError`      | returns `this`; action **not** executed     | runs the action                                |
+| `peekProblem`      | returns `this`; action **not** executed     | runs the action                                |
 | `recover`        | returns `this`; recovery **not** executed   | returns `Success` with the recovered value     |
 | `recoverWith`    | returns `this`; recovery **not** executed   | returns the recovered `Outcome`                |
 | `isSuccess()`    | `true`                                      | `false`                                        |
@@ -71,7 +71,7 @@ The two central behaviors that distinguish the combinators:
 
 - **`flatMap` short-circuits** — the first `Failure` stops all further work.
 - **`sequence` accumulates** — it never stops at the first `Failure`; it
-  collects the errors from every failure.
+  collects the problems from every failure.
 
 ### Example: `sequence`
 
@@ -96,14 +96,14 @@ An empty input produces `Success(List.of())`.
 |------------------------------------------------------------------------|----------------------------------------------------|
 | `<R> Outcome<R> map(Function<? super T,? extends R>)`                  | transform the success value                        |
 | `<R> Outcome<R> flatMap(Function<? super T,? extends Outcome<R>>)`     | chain an outcome-returning operation               |
-| `Outcome<T> mapError(Function<? super Error,? extends Error>)`         | transform every error                              |
-| `<R> R fold(Function<? super T,? extends R>, Function<? super Errors,? extends R>)` | collapse into a single value        |
+| `Outcome<T> mapProblem(Function<? super Problem,? extends Problem>)`         | transform every problem                              |
+| `<R> R fold(Function<? super T,? extends R>, Function<? super Problems,? extends R>)` | collapse into a single value        |
 | `Outcome<T> peek(Consumer<? super T>)`                                 | side effect on success                             |
-| `Outcome<T> peekError(Consumer<? super Errors>)`                       | side effect on failure                             |
-| `Outcome<T> recover(Function<? super Errors,? extends T>)`            | recover a value from failure                       |
-| `Outcome<T> recoverWith(Function<? super Errors,? extends Outcome<T>>)` | recover an outcome from failure                  |
+| `Outcome<T> peekProblem(Consumer<? super Problems>)`                       | side effect on failure                             |
+| `Outcome<T> recover(Function<? super Problems,? extends T>)`            | recover a value from failure                       |
+| `Outcome<T> recoverWith(Function<? super Problems,? extends Outcome<T>>)` | recover an outcome from failure                  |
 | `boolean isSuccess()` / `boolean isFailure()`                          | type checks (default methods)                      |
-| `static <T> Outcome<List<T>> sequence(Iterable<? extends Outcome<T>>)` | combine outcomes, accumulating all errors          |
+| `static <T> Outcome<List<T>> sequence(Iterable<? extends Outcome<T>>)` | combine outcomes, accumulating all problems          |
 
 ### `Success<T>` (record)
 
@@ -111,35 +111,35 @@ An empty input produces `Success(List.of())`.
 
 ### `Failure<T>` (record)
 
-`Failure<T>(Errors errors)` — the errors may not be `null`, and `Errors`
-always contains at least one error.
+`Failure<T>(Problems problems)` — the problems may not be `null`, and `Problems`
+always contains at least one problem.
 
-### `Errors`
+### `Problems`
 
-An immutable, ordered snapshot of one or more `Error`s.
+An immutable, ordered snapshot of one or more `Problem`s.
 
 | Method | Description |
 |--------|-------------|
-| `int size()` | number of errors |
-| `Error first()` | first error |
-| `List<Error> all()` | immutable view of all errors, in order |
-| `boolean contains(Error)` | semantic equality check |
-| `Errors map(Function<Error,Error>)` | transform every error, preserving order |
+| `int size()` | number of problems |
+| `Problem first()` | first problem |
+| `List<Problem> all()` | immutable view of all problems, in order |
+| `boolean contains(Problem)` | semantic equality check |
+| `Problems map(Function<Problem,Problem>)` | transform every problem, preserving order |
 
-### `Error`
+### `Problem`
 
-An immutable error with:
+An immutable problem with:
 
 - `String code` — non-blank
 - `String description` — non-blank
-- `ErrorType type` — non-null
+- `ProblemType type` — non-null
 - `Map<String, Object> metadata` — immutable; `null` normalizes to an empty map
 - `Throwable cause` — optional
 
 **Equality** is based on `code`, `description`, `type` and `metadata`. The
 `cause` is diagnostic information and does not participate in equality.
 
-### `ErrorType`
+### `ProblemType`
 
 `VALIDATION`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `FORBIDDEN`,
 `DEPENDENCY`, `TIMEOUT`, `UNAVAILABLE`, `INTERNAL`.
@@ -147,9 +147,9 @@ An immutable error with:
 ## Invariants
 
 - `Success` never holds a `null` value.
-- `Failure` always holds a non-empty `Errors`.
-- `Errors` is immutable, preserves insertion order, and never deduplicates.
-- `Error.metadata` is immutable after construction.
+- `Failure` always holds a non-empty `Problems`.
+- `Problems` is immutable, preserves insertion order, and never deduplicates.
+- `Problem.metadata` is immutable after construction.
 - Null is rejected for every function argument, and any mapper/recovery that
   returns `null` fails fast with a `NullPointerException`.
 - `Outcome` values are immutable; no operation ever mutates the instance it

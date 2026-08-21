@@ -1,8 +1,8 @@
 package io.github.daniel99412.outcome;
 
-import io.github.daniel99412.outcome.error.Error;
-import io.github.daniel99412.outcome.error.ErrorType;
-import io.github.daniel99412.outcome.error.Errors;
+import io.github.daniel99412.outcome.problem.Problem;
+import io.github.daniel99412.outcome.problem.ProblemType;
+import io.github.daniel99412.outcome.problem.Problems;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -45,43 +45,43 @@ class FailureTest {
     }
 
     @Test
-    void mapErrorTransformsEveryError() {
+    void mapProblemTransformsEveryProblem() {
         Failure<String> failure = TestOutcomes.failure("E1", "E2");
 
-        Outcome<String> result = failure.mapError(e ->
-                TestOutcomes.error(e.code() + "-mapped", e.description(), e.type()));
+        Outcome<String> result = failure.mapProblem(e ->
+                TestOutcomes.problem(e.code() + "-mapped", e.description(), e.type()));
 
         assertTrue(result.isFailure());
         Failure<String> mapped = (Failure<String>) result;
-        assertEquals(2, mapped.errors().size());
-        assertEquals("E1-mapped", mapped.errors().first().code());
-        assertEquals("E2-mapped", mapped.errors().all().get(1).code());
+        assertEquals(2, mapped.problems().size());
+        assertEquals("E1-mapped", mapped.problems().first().code());
+        assertEquals("E2-mapped", mapped.problems().all().get(1).code());
     }
 
     @Test
-    void mapErrorDoesNotMutateOriginal() {
+    void mapProblemDoesNotMutateOriginal() {
         Failure<String> failure = TestOutcomes.failure("E1");
 
-        failure.mapError(e -> TestOutcomes.error(e.code() + "-mapped", e.description(), e.type()));
+        failure.mapProblem(e -> TestOutcomes.problem(e.code() + "-mapped", e.description(), e.type()));
 
-        assertEquals("E1", failure.errors().first().code());
-        assertEquals(1, failure.errors().size());
+        assertEquals("E1", failure.problems().first().code());
+        assertEquals(1, failure.problems().size());
     }
 
     @Test
-    void mapErrorProducesNewFailure() {
+    void mapProblemProducesNewFailure() {
         Failure<String> failure = TestOutcomes.failure("E1");
 
-        Outcome<String> result = failure.mapError(e -> e);
+        Outcome<String> result = failure.mapProblem(e -> e);
 
         assertNotSame(failure, result);
     }
 
     @Test
-    void mapErrorRejectsNullResult() {
+    void mapProblemRejectsNullResult() {
         Failure<String> failure = TestOutcomes.failure("E1");
 
-        assertThrows(NullPointerException.class, () -> failure.mapError(e -> null));
+        assertThrows(NullPointerException.class, () -> failure.mapProblem(e -> null));
     }
 
     @Test
@@ -93,7 +93,7 @@ class FailureTest {
                     successInvocations.incrementAndGet();
                     return "success";
                 },
-                errors -> "failure:" + errors.size());
+                problems -> "failure:" + problems.size());
 
         assertEquals("failure:1", result);
         assertEquals(0, successInvocations.get());
@@ -111,11 +111,11 @@ class FailureTest {
     }
 
     @Test
-    void peekErrorExecutesAndReturnsSame() {
+    void peekProblemExecutesAndReturnsSame() {
         AtomicInteger executed = new AtomicInteger(0);
         Failure<String> failure = TestOutcomes.failure("E1");
 
-        Outcome<String> result = failure.peekError(errors -> executed.incrementAndGet());
+        Outcome<String> result = failure.peekProblem(problems -> executed.incrementAndGet());
 
         assertEquals(1, executed.get());
         assertSame(failure, result);
@@ -123,7 +123,7 @@ class FailureTest {
 
     @Test
     void recoverTransformsFailureIntoSuccess() {
-        Outcome<String> result = TestOutcomes.failure("E1").recover(errors -> "default");
+        Outcome<String> result = TestOutcomes.failure("E1").recover(problems -> "default");
 
         assertTrue(result.isSuccess());
         assertEquals(new Success<>("default"), result);
@@ -132,13 +132,13 @@ class FailureTest {
     @Test
     void recoverRejectsNullValue() {
         assertThrows(NullPointerException.class,
-                () -> TestOutcomes.failure("E1").recover(errors -> null));
+                () -> TestOutcomes.failure("E1").recover(problems -> null));
     }
 
     @Test
     void recoverWithTransformsFailureIntoOutcome() {
         Outcome<String> result = TestOutcomes.failure("E1")
-                .recoverWith(errors -> new Success<>("fallback"));
+                .recoverWith(problems -> new Success<>("fallback"));
 
         assertTrue(result.isSuccess());
         assertEquals(new Success<>("fallback"), result);
@@ -147,7 +147,7 @@ class FailureTest {
     @Test
     void recoverWithCanReturnAnotherFailure() {
         Outcome<String> result = TestOutcomes.failure("E1")
-                .recoverWith(errors -> new Failure<>(errors));
+                .recoverWith(problems -> new Failure<>(problems));
 
         assertTrue(result.isFailure());
     }
@@ -155,11 +155,11 @@ class FailureTest {
     @Test
     void recoverWithRejectsNullResult() {
         assertThrows(NullPointerException.class,
-                () -> TestOutcomes.failure("E1").recoverWith(errors -> null));
+                () -> TestOutcomes.failure("E1").recoverWith(problems -> null));
     }
 
     @Test
-    void nullErrorsRejected() {
+    void nullProblemsRejected() {
         assertThrows(NullPointerException.class, () -> new Failure<>(null));
     }
 
@@ -172,27 +172,27 @@ class FailureTest {
         assertThrows(NullPointerException.class, () -> failure.fold(null, e -> "x"));
         assertThrows(NullPointerException.class, () -> failure.fold(v -> "x", null));
         assertThrows(NullPointerException.class, () -> failure.peek(null));
-        assertThrows(NullPointerException.class, () -> failure.peekError(null));
+        assertThrows(NullPointerException.class, () -> failure.peekProblem(null));
         assertThrows(NullPointerException.class, () -> failure.recover(null));
         assertThrows(NullPointerException.class, () -> failure.recoverWith(null));
     }
 
     @Test
-    void errorTypePreservedThroughMapError() {
+    void problemTypePreservedThroughMapProblem() {
         Failure<String> failure = TestOutcomes.failure("E1");
 
-        Outcome<String> result = failure.mapError(e ->
-                TestOutcomes.error("new", e.description(), ErrorType.NOT_FOUND));
+        Outcome<String> result = failure.mapProblem(e ->
+                TestOutcomes.problem("new", e.description(), ProblemType.NOT_FOUND));
 
         Failure<String> mapped = (Failure<String>) result;
-        assertEquals(ErrorType.NOT_FOUND, mapped.errors().first().type());
+        assertEquals(ProblemType.NOT_FOUND, mapped.problems().first().type());
     }
 
     @Test
-    void errorsExposedAreNotNull() {
-        Errors errors = TestOutcomes.failure("E1").errors();
+    void problemsExposedAreNotNull() {
+        Problems problems = TestOutcomes.failure("E1").problems();
 
-        assertTrue(errors.size() > 0);
-        assertFalse(errors.all().isEmpty());
+        assertTrue(problems.size() > 0);
+        assertFalse(problems.all().isEmpty());
     }
 }

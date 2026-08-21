@@ -1,37 +1,37 @@
 package io.github.daniel99412.outcome;
 
-import io.github.daniel99412.outcome.error.Error;
-import io.github.daniel99412.outcome.error.ErrorType;
-import io.github.daniel99412.outcome.error.Errors;
+import io.github.daniel99412.outcome.problem.Problem;
+import io.github.daniel99412.outcome.problem.ProblemType;
+import io.github.daniel99412.outcome.problem.Problems;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Test utilities for building outcomes and errors.
+ * Test utilities for building outcomes and problems.
  */
 final class TestOutcomes {
 
     private TestOutcomes() {
     }
 
-    static Error error(String code) {
-        return new Error(code, "description of " + code, ErrorType.INTERNAL, Map.of(), null);
+    static Problem problem(String code) {
+        return new Problem(code, "description of " + code, ProblemType.INTERNAL, Map.of(), null);
     }
 
-    static Error error(String code, ErrorType type) {
-        return new Error(code, "description of " + code, type, Map.of(), null);
+    static Problem problem(String code, ProblemType type) {
+        return new Problem(code, "description of " + code, type, Map.of(), null);
     }
 
-    static Error error(String code, String description, ErrorType type) {
-        return new Error(code, description, type, Map.of(), null);
+    static Problem problem(String code, String description, ProblemType type) {
+        return new Problem(code, description, type, Map.of(), null);
     }
 
     static Failure<String> failure(String... codes) {
-        List<Error> errors = Arrays.stream(codes)
-                .map(TestOutcomes::error)
+        List<Problem> problems = Arrays.stream(codes)
+                .map(TestOutcomes::problem)
                 .toList();
-        return new Failure<>(new Errors(errors));
+        return new Failure<>(new Problems(problems));
     }
 }

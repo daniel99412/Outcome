@@ -1,7 +1,7 @@
 package io.github.daniel99412.outcome;
 
-import io.github.daniel99412.outcome.error.Error;
-import io.github.daniel99412.outcome.error.Errors;
+import io.github.daniel99412.outcome.problem.Problem;
+import io.github.daniel99412.outcome.problem.Problems;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -10,25 +10,25 @@ import java.util.function.Function;
 /**
  * An {@link Outcome} representing a failed result.
  * <p>
- * A {@code Failure} always carries a non-null {@link Errors} instance that
- * contains at least one {@link Error}. It executes the failure operations
- * ({@code mapError}, {@code fold} failure branch, {@code peekError},
+ * A {@code Failure} always carries a non-null {@link Problems} instance that
+ * contains at least one {@link Problem}. It executes the failure operations
+ * ({@code mapProblem}, {@code fold} failure branch, {@code peekProblem},
  * {@code recover}, {@code recoverWith}) and ignores the success operations
  * ({@code map}, {@code flatMap}, {@code peek}) with short-circuit behavior.
  *
  * @param <T>    the type the failure would have carried on success
- * @param errors the accumulated errors; must not be empty
+ * @param problems the accumulated problems; must not be empty
  */
-public record Failure<T>(Errors errors) implements Outcome<T> {
+public record Failure<T>(Problems problems) implements Outcome<T> {
 
     /**
-     * Creates a {@code Failure} carrying the given errors.
+     * Creates a {@code Failure} carrying the given problems.
      *
-     * @param errors the accumulated errors
-     * @throws NullPointerException if the errors are null
+     * @param problems the accumulated problems
+     * @throws NullPointerException if the problems are null
      */
     public Failure {
-        Objects.requireNonNull(errors, "errors cannot be null");
+        Objects.requireNonNull(problems, "problems cannot be null");
     }
 
     @SuppressWarnings("unchecked")
@@ -46,18 +46,18 @@ public record Failure<T>(Errors errors) implements Outcome<T> {
     }
 
     @Override
-    public Outcome<T> mapError(Function<? super Error, ? extends Error> mapper) {
+    public Outcome<T> mapProblem(Function<? super Problem, ? extends Problem> mapper) {
         Objects.requireNonNull(mapper, "mapper cannot be null");
-        return new Failure<>(errors.map(mapper));
+        return new Failure<>(problems.map(mapper));
     }
 
     @Override
     public <R> R fold(
             Function<? super T, ? extends R> onSuccess,
-            Function<? super Errors, ? extends R> onFailure) {
+            Function<? super Problems, ? extends R> onFailure) {
         Objects.requireNonNull(onSuccess, "onSuccess cannot be null");
         Objects.requireNonNull(onFailure, "onFailure cannot be null");
-        return onFailure.apply(errors);
+        return onFailure.apply(problems);
     }
 
     @Override
@@ -67,23 +67,23 @@ public record Failure<T>(Errors errors) implements Outcome<T> {
     }
 
     @Override
-    public Outcome<T> peekError(Consumer<? super Errors> action) {
+    public Outcome<T> peekProblem(Consumer<? super Problems> action) {
         Objects.requireNonNull(action, "action cannot be null");
-        action.accept(errors);
+        action.accept(problems);
         return this;
     }
 
     @Override
-    public Outcome<T> recover(Function<? super Errors, ? extends T> recovery) {
+    public Outcome<T> recover(Function<? super Problems, ? extends T> recovery) {
         Objects.requireNonNull(recovery, "recovery cannot be null");
-        T recovered = recovery.apply(errors);
+        T recovered = recovery.apply(problems);
         return new Success<>(Objects.requireNonNull(recovered, "recovery cannot return null"));
     }
 
     @Override
-    public Outcome<T> recoverWith(Function<? super Errors, ? extends Outcome<T>> recovery) {
+    public Outcome<T> recoverWith(Function<? super Problems, ? extends Outcome<T>> recovery) {
         Objects.requireNonNull(recovery, "recovery cannot be null");
-        Outcome<T> recovered = recovery.apply(errors);
+        Outcome<T> recovered = recovery.apply(problems);
         return Objects.requireNonNull(recovered, "recovery cannot return null");
     }
 }

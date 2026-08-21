@@ -38,11 +38,11 @@ class SequenceTest {
 
         assertTrue(result.isFailure());
         Failure<List<String>> failure = (Failure<List<String>>) result;
-        assertEquals(List.of("E1"), failure.errors().all().stream().map(e -> e.code()).toList());
+        assertEquals(List.of("E1"), failure.problems().all().stream().map(e -> e.code()).toList());
     }
 
     @Test
-    void multipleFailuresAccumulateAllErrorsInOrder() {
+    void multipleFailuresAccumulateAllProblemsInOrder() {
         Outcome<List<String>> result = Outcome.sequence(List.of(
                 new Success<>("A"),
                 TestOutcomes.<String>failure("E1", "E2"),
@@ -52,11 +52,11 @@ class SequenceTest {
         assertTrue(result.isFailure());
         Failure<List<String>> failure = (Failure<List<String>>) result;
         assertEquals(List.of("E1", "E2", "E3"),
-                failure.errors().all().stream().map(e -> e.code()).toList());
+                failure.problems().all().stream().map(e -> e.code()).toList());
     }
 
     @Test
-    void orderOfErrorsMatchesEncounterOrder() {
+    void orderOfProblemsMatchesEncounterOrder() {
         Outcome<List<String>> result = Outcome.sequence(List.of(
                 TestOutcomes.<String>failure("A", "B"),
                 new Success<>("s"),
@@ -64,7 +64,7 @@ class SequenceTest {
 
         Failure<List<String>> failure = (Failure<List<String>>) result;
         assertEquals(List.of("A", "B", "C"),
-                failure.errors().all().stream().map(e -> e.code()).toList());
+                failure.problems().all().stream().map(e -> e.code()).toList());
     }
 
     @Test
@@ -74,8 +74,8 @@ class SequenceTest {
                 TestOutcomes.<String>failure("E2")));
 
         Failure<List<String>> failure = (Failure<List<String>>) result;
-        assertEquals(2, failure.errors().size());
-        assertEquals("E2", failure.errors().all().get(1).code());
+        assertEquals(2, failure.problems().size());
+        assertEquals("E2", failure.problems().all().get(1).code());
     }
 
     @Test

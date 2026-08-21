@@ -3,6 +3,10 @@
 
 [versions]
 junit-jupiter = "5.12.1"
+archunit = "1.4.0"
+equalsverifier = "3.17.4"
 
 [libraries]
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
+equalsverifier = { module = "nl.jqno.equalsverifier:equalsverifier", version.ref = "equalsverifier" }

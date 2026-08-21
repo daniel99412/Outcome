@@ -1,13 +1,13 @@
-package io.github.daniel99412.outcome.error;
+package io.github.daniel99412.outcome.problem;
 
 /**
- * The category of an {@link Error}.
+ * The category of a {@link Problem}.
  * <p>
  * These types are deliberately generic and domain-agnostic. They can be used
  * to drive uniform handling such as logging, status mapping or user feedback
  * without coupling the core library to any framework.
  */
-public enum ErrorType {
+public enum ProblemType {
     /** The input or state did not satisfy the required constraints. */
     VALIDATION,
     /** A referenced entity could not be found. */

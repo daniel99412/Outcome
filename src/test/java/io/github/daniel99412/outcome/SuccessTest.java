@@ -42,11 +42,11 @@ class SuccessTest {
     }
 
     @Test
-    void mapErrorDoesNotExecuteMapper() {
+    void mapProblemDoesNotExecuteMapper() {
         AtomicInteger invocations = new AtomicInteger(0);
         Outcome<Integer> outcome = new Success<>(1);
 
-        Outcome<Integer> result = outcome.mapError(e -> {
+        Outcome<Integer> result = outcome.mapProblem(e -> {
             invocations.incrementAndGet();
             return e;
         });
@@ -61,7 +61,7 @@ class SuccessTest {
 
         String result = new Success<>(5).fold(
                 v -> "success:" + v,
-                errors -> {
+                problems -> {
                     failureInvocations.incrementAndGet();
                     return "failure";
                 });
@@ -82,11 +82,11 @@ class SuccessTest {
     }
 
     @Test
-    void peekErrorDoesNotExecute() {
+    void peekProblemDoesNotExecute() {
         AtomicInteger executed = new AtomicInteger(0);
         Outcome<Integer> outcome = new Success<>(1);
 
-        Outcome<Integer> result = outcome.peekError(errors -> executed.incrementAndGet());
+        Outcome<Integer> result = outcome.peekProblem(problems -> executed.incrementAndGet());
 
         assertEquals(0, executed.get());
         assertSame(outcome, result);
@@ -97,7 +97,7 @@ class SuccessTest {
         AtomicInteger invoked = new AtomicInteger(0);
         Outcome<String> outcome = new Success<>("ok");
 
-        Outcome<String> result = outcome.recover(errors -> {
+        Outcome<String> result = outcome.recover(problems -> {
             invoked.incrementAndGet();
             return "recovered";
         });
@@ -111,7 +111,7 @@ class SuccessTest {
         AtomicInteger invoked = new AtomicInteger(0);
         Outcome<String> outcome = new Success<>("ok");
 
-        Outcome<String> result = outcome.recoverWith(errors -> {
+        Outcome<String> result = outcome.recoverWith(problems -> {
             invoked.incrementAndGet();
             return new Success<>("recovered");
         });
@@ -141,7 +141,7 @@ class SuccessTest {
         assertThrows(NullPointerException.class, () -> success.fold(null, e -> "x"));
         assertThrows(NullPointerException.class, () -> success.fold(v -> "x", null));
         assertThrows(NullPointerException.class, () -> success.peek(null));
-        assertThrows(NullPointerException.class, () -> success.peekError(null));
+        assertThrows(NullPointerException.class, () -> success.peekProblem(null));
         assertThrows(NullPointerException.class, () -> success.recover(null));
         assertThrows(NullPointerException.class, () -> success.recoverWith(null));
     }
@@ -159,7 +159,7 @@ class SuccessTest {
     @Test
     void foldDoesNotTouchFailureBranchFunction() {
         AtomicBoolean failureBranch = new AtomicBoolean(false);
-        new Success<>("v").fold(v -> "ok", errors -> {
+        new Success<>("v").fold(v -> "ok", problems -> {
             failureBranch.set(true);
             return "bad";
         });

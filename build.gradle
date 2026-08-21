@@ -2,6 +2,8 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
+    id 'jacoco'
+    id 'info.solidsoft.pitest' version '1.19.0'
 }
 
 group = 'io.github.daniel99412'
@@ -22,7 +24,10 @@ repositories {
 
 dependencies {
     testImplementation libs.junit.jupiter
+    testImplementation libs.archunit
+    testImplementation libs.equalsverifier
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    pitest 'org.pitest:pitest-junit5-plugin:1.2.1'
 }
 
 java {
@@ -35,6 +40,47 @@ java {
 
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.85
+            }
+        }
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+pitest {
+    targetClasses = ['io.github.daniel99412.outcome.*']
+    targetTests = ['io.github.daniel99412.outcome.*']
+    threads = 4
+    outputFormats = ['HTML', 'XML']
+    mutationThreshold = 85
+    coverageThreshold = 85
+    verbose = false
 }
 
 publishing {
