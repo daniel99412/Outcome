@@ -50,6 +50,17 @@ Outcome<String> result = lookupUser("ada")
         .recover(problems -> "unknown user");
 ```
 
+## Factories
+
+```java
+Outcome<User> ok      = Outcome.success(user);
+Outcome<User> missing = Outcome.failure(notFoundProblem);
+Outcome<User> many    = Outcome.failure(problem1, problem2);   // varargs
+```
+
+Exceptions are intentionally **not** caught by the core: converting a thrown
+exception into a `Problem` is the caller's decision.
+
 ## Core semantics
 
 The two halves of `Outcome` behave as strict counterparts:
@@ -64,14 +75,17 @@ The two halves of `Outcome` behave as strict counterparts:
 | `peekProblem`      | returns `this`; action **not** executed     | runs the action                                |
 | `recover`        | returns `this`; recovery **not** executed   | returns `Success` with the recovered value     |
 | `recoverWith`    | returns `this`; recovery **not** executed   | returns the recovered `Outcome`                |
+| `orElse`         | returns the value                           | returns the fallback value                     |
+| `orElseGet`      | returns the value; supplier **not** executed| returns the supplied fallback value            |
+| `orElseThrow`    | returns the value; mapper **not** executed  | throws the mapped exception                    |
 | `isSuccess()`    | `true`                                      | `false`                                        |
 | `isFailure()`    | `false`                                     | `true`                                         |
 
 The two central behaviors that distinguish the combinators:
 
 - **`flatMap` short-circuits** — the first `Failure` stops all further work.
-- **`sequence` accumulates** — it never stops at the first `Failure`; it
-  collects the problems from every failure.
+- **`sequence`/`traverse` accumulate** — they never stop at the first
+  `Failure`; they collect the problems from every failure.
 
 ### Example: `sequence`
 
@@ -88,12 +102,31 @@ Outcome<List<String>> result = Outcome.sequence(List.of(
 
 An empty input produces `Success(List.of())`.
 
+`sequence` also accepts varargs:
+
+```java
+Outcome<List<String>> result = Outcome.sequence(success("A"), success("B"));
+```
+
+### Example: `traverse`
+
+```java
+// validate every user and accumulate ALL validation problems
+Outcome<List<User>> result = Outcome.traverse(users, this::validateUser);
+```
+
+Conceptually `traverse(source, mapper)` is equivalent to mapping the source
+and sequencing the results: the mapper runs for every element, successes keep
+their order, failures contribute all their problems.
+
 ## API
 
 ### `Outcome<T>` (sealed interface)
 
 | Signature                                                              | Description                                        |
 |------------------------------------------------------------------------|----------------------------------------------------|
+| `static <T> Outcome<T> success(T)`                                     | create a `Success`; value must not be null          |
+| `static <T> Outcome<T> failure(Problem)` / `failure(Problems)` / `failure(Problem...)` | create a `Failure`                  |
 | `<R> Outcome<R> map(Function<? super T,? extends R>)`                  | transform the success value                        |
 | `<R> Outcome<R> flatMap(Function<? super T,? extends Outcome<R>>)`     | chain an outcome-returning operation               |
 | `Outcome<T> mapProblem(Function<? super Problem,? extends Problem>)`         | transform every problem                              |
@@ -102,8 +135,13 @@ An empty input produces `Success(List.of())`.
 | `Outcome<T> peekProblem(Consumer<? super Problems>)`                       | side effect on failure                             |
 | `Outcome<T> recover(Function<? super Problems,? extends T>)`            | recover a value from failure                       |
 | `Outcome<T> recoverWith(Function<? super Problems,? extends Outcome<T>>)` | recover an outcome from failure                  |
+| `T orElse(T)`                                                          | success value, or the given fallback (never null)  |
+| `T orElseGet(Supplier<? extends T>)`                                   | success value, or lazily supplied fallback         |
+| `<X extends Throwable> T orElseThrow(Function<? super Problems,? extends X>) throws X` | success value, or throw mapped exception |
 | `boolean isSuccess()` / `boolean isFailure()`                          | type checks (default methods)                      |
 | `static <T> Outcome<List<T>> sequence(Iterable<? extends Outcome<T>>)` | combine outcomes, accumulating all problems          |
+| `static <T> Outcome<List<T>> sequence(Outcome<T>...)`                  | varargs convenience overload of `sequence`           |
+| `static <S,T> Outcome<List<T>> traverse(Iterable<S>, Function<? super S,? extends Outcome<T>>)` | map + sequence in one step |
 
 ### `Success<T>` (record)
 
@@ -150,8 +188,11 @@ An immutable problem with:
 - `Failure` always holds a non-empty `Problems`.
 - `Problems` is immutable, preserves insertion order, and never deduplicates.
 - `Problem.metadata` is immutable after construction.
-- Null is rejected for every function argument, and any mapper/recovery that
-  returns `null` fails fast with a `NullPointerException`.
+- Null is rejected for every function argument, and any callback (`map`,
+  `flatMap`, `recover`, `recoverWith`) that returns `null` fails fast with a
+  `NullPointerException` — a null result is a programming-contract violation,
+  never a domain problem.
+- `orElse`, `orElseGet` and `orElseThrow` never return null.
 - `Outcome` values are immutable; no operation ever mutates the instance it
   is called on.
 

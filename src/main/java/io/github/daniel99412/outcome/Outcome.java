@@ -4,10 +4,12 @@ import io.github.daniel99412.outcome.problem.Problem;
 import io.github.daniel99412.outcome.problem.Problems;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The result of a possibly failing operation.
@@ -23,6 +25,60 @@ import java.util.function.Function;
  */
 public sealed interface Outcome<T>
         permits Success, Failure {
+
+    /**
+     * Creates a {@link Success} holding the given value.
+     *
+     * @param value the successful value; must not be null
+     * @param <T>   the type of the value
+     * @return a {@code Success} holding the value
+     * @throws NullPointerException if the value is null
+     */
+    static <T> Outcome<T> success(T value) {
+        return new Success<>(value);
+    }
+
+    /**
+     * Creates a {@link Failure} carrying a single {@link Problem}.
+     *
+     * @param problem the problem to carry; must not be null
+     * @param <T>     the type the failure would have carried on success
+     * @return a {@code Failure} carrying the given problem
+     * @throws NullPointerException if the problem is null
+     */
+    static <T> Outcome<T> failure(Problem problem) {
+        Objects.requireNonNull(problem, "problem cannot be null");
+        return new Failure<>(new Problems(List.of(problem)));
+    }
+
+    /**
+     * Creates a {@link Failure} carrying the given problems.
+     *
+     * @param problems the problems to carry; must not be null and must not be empty
+     * @param <T>      the type the failure would have carried on success
+     * @return a {@code Failure} carrying the given problems
+     * @throws NullPointerException     if the problems are null or contain null elements
+     * @throws IllegalArgumentException if the problems are empty
+     */
+    static <T> Outcome<T> failure(Problems problems) {
+        Objects.requireNonNull(problems, "problems cannot be null");
+        return new Failure<>(problems);
+    }
+
+    /**
+     * Creates a {@link Failure} carrying the given problems, in order.
+     *
+     * @param problems the problems to carry; must not be null, must not be empty,
+     *                 and must not contain null elements
+     * @param <T>      the type the failure would have carried on success
+     * @return a {@code Failure} carrying the given problems
+     * @throws NullPointerException     if the array, or any of its elements, is null
+     * @throws IllegalArgumentException if the array is empty
+     */
+    static <T> Outcome<T> failure(Problem... problems) {
+        Objects.requireNonNull(problems, "problems cannot be null");
+        return new Failure<>(new Problems(Arrays.asList(problems)));
+    }
 
     /**
      * Transforms the value of a {@link Success} by applying the given mapper,
@@ -140,6 +196,63 @@ public sealed interface Outcome<T>
     }
 
     /**
+     * Returns the value of a {@link Success}, or {@code other} when this is a
+     * {@link Failure}. The result of this method is never null.
+     *
+     * @param other the value to return on failure; must not be null
+     * @return the success value, or the given fallback value
+     * @throws NullPointerException if {@code other} is null
+     */
+    default T orElse(T other) {
+        Objects.requireNonNull(other, "other cannot be null");
+        return fold(value -> value, problems -> other);
+    }
+
+    /**
+     * Returns the value of a {@link Success}, or the value produced by the given
+     * supplier when this is a {@link Failure}. The supplier is only executed on
+     * a failure. The result of this method is never null.
+     *
+     * @param supplier the supplier of the fallback value; must not be null and
+     *                 must not produce null
+     * @return the success value, or the supplied fallback value
+     * @throws NullPointerException if the supplier is null, or produces null
+     */
+    default T orElseGet(Supplier<? extends T> supplier) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return fold(value -> value, problems ->
+                Objects.requireNonNull(supplier.get(), "supplier cannot return null"));
+    }
+
+    /**
+     * Returns the value of a {@link Success}, or throws the exception produced
+     * by the given mapper when this is a {@link Failure}. The mapper is only
+     * executed on a failure.
+     *
+     * @param exceptionMapper the function that maps the problems to an exception; must
+     *                        not be null and must not produce null
+     * @param <X>             the type of the exception to throw
+     * @return the success value
+     * @throws X                    if this is a {@link Failure}
+     * @throws NullPointerException if the mapper is null, or produces null
+     */
+    default <X extends Throwable> T orElseThrow(
+            Function<? super Problems, ? extends X> exceptionMapper) throws X {
+        Objects.requireNonNull(exceptionMapper, "exceptionMapper cannot be null");
+        switch (this) {
+            case Success<T> success -> {
+                return success.value();
+            }
+            case Failure<T> failure -> {
+                X exception = Objects.requireNonNull(
+                        exceptionMapper.apply(failure.problems()),
+                        "exceptionMapper cannot return null");
+                throw exception;
+            }
+        }
+    }
+
+    /**
      * Combines a collection of outcomes into a single outcome.
      * <p>
      * If every outcome is a {@link Success}, the result is a {@code Success}
@@ -179,5 +292,54 @@ public sealed interface Outcome<T>
             return new Success<>(List.copyOf(values));
         }
         return new Failure<>(new Problems(problems));
+    }
+
+    /**
+     * Combines the given outcomes into a single outcome, delegating to
+     * {@link #sequence(Iterable)}. The semantics are identical: successes are
+     * collected in order, failures accumulate every problem, and an empty
+     * invocation produces an empty {@code Success}.
+     *
+     * @param outcomes the outcomes to combine; must not be null
+     * @param <T>      the type of the individual values
+     * @return a single {@code Outcome} combining all the given outcomes
+     * @throws NullPointerException if the array, or any of its elements, is null
+     */
+    @SafeVarargs
+    static <T> Outcome<List<T>> sequence(Outcome<T>... outcomes) {
+        Objects.requireNonNull(outcomes, "outcomes cannot be null");
+        return sequence(Arrays.asList(outcomes));
+    }
+
+    /**
+     * Applies the given mapper to every element of the source and combines the
+     * produced outcomes with the semantics of {@link #sequence(Iterable)}.
+     * <p>
+     * Conceptually {@code traverse(source, mapper)} is equivalent to mapping
+     * the source and sequencing the results. The mapper is executed for every
+     * element; successes contribute their values in order and failures
+     * contribute all of their problems, so no error is ever lost. An empty
+     * source produces an empty {@code Success}.
+     *
+     * @param source the elements to map; must not be null
+     * @param mapper the function applied to each element, producing an outcome;
+     *               must not be null and must not produce null
+     * @param <S>    the type of the source elements
+     * @param <T>    the type of the mapped values
+     * @return a single {@code Outcome} combining every mapped outcome
+     * @throws NullPointerException if the source, the mapper, or a mapped result is null
+     */
+    static <S, T> Outcome<List<T>> traverse(
+            Iterable<S> source,
+            Function<? super S, ? extends Outcome<T>> mapper) {
+        Objects.requireNonNull(source, "source cannot be null");
+        Objects.requireNonNull(mapper, "mapper cannot be null");
+
+        List<Outcome<T>> outcomes = new ArrayList<>();
+        for (S element : source) {
+            outcomes.add(Objects.requireNonNull(
+                    mapper.apply(element), "mapper cannot return null"));
+        }
+        return sequence(outcomes);
     }
 }

@@ -80,7 +80,10 @@ class SequenceTest {
 
     @Test
     void nullIterableRejected() {
-        assertThrows(NullPointerException.class, () -> Outcome.sequence(null));
+        assertThrows(NullPointerException.class,
+                () -> Outcome.sequence((Iterable<Outcome<String>>) null));
+        assertThrows(NullPointerException.class,
+                () -> Outcome.sequence((Outcome<String>[]) null));
     }
 
     @Test

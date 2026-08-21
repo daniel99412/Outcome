@@ -38,6 +38,12 @@ java {
     withSourcesJar()
 }
 
+tasks.named('jar') {
+    manifest {
+        attributes('Automatic-Module-Name': 'io.github.daniel99412.outcome')
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport

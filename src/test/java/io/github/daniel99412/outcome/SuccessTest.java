@@ -42,6 +42,14 @@ class SuccessTest {
     }
 
     @Test
+    void mapRejectsNullResultWithExplicitMessage() {
+        NullPointerException thrown = assertThrows(NullPointerException.class,
+                () -> new Success<>(1).map(v -> null));
+
+        assertEquals("map mapper cannot return null", thrown.getMessage());
+    }
+
+    @Test
     void mapProblemDoesNotExecuteMapper() {
         AtomicInteger invocations = new AtomicInteger(0);
         Outcome<Integer> outcome = new Success<>(1);

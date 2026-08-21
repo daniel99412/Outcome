@@ -33,7 +33,8 @@ public record Success<T>(T value) implements Outcome<T> {
     @Override
     public <R> Outcome<R> map(Function<? super T, ? extends R> mapper) {
         Objects.requireNonNull(mapper, "mapper cannot be null");
-        return new Success<>(mapper.apply(value));
+        R mapped = Objects.requireNonNull(mapper.apply(value), "map mapper cannot return null");
+        return new Success<>(mapped);
     }
 
     @Override
