@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+env:
+  SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+  SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+  GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+  GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Java version from build
+        id: java
+        run: |
+          BUILD_FILE=$(ls build.gradle build.gradle.kts 2>/dev/null | head -1)
+          if [ -z "$BUILD_FILE" ]; then
+            JAVA_VERSION=21
+          else
+            JAVA_VERSION=$(grep -hoE 'JavaLanguageVersion\.of\([0-9]+\)|jvmToolchain\([0-9]+\)' "$BUILD_FILE" | grep -oE '[0-9]+' | head -1)
+            JAVA_VERSION=${JAVA_VERSION:-21}
+          fi
+          echo "Found Java version: $JAVA_VERSION"
+          echo "java_version=$JAVA_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ steps.java.outputs.java_version }}
+          distribution: 'temurin'
+
+      - name: Get latest tag
+        id: tag
+        run: |
+          TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          # First release of the library ships as 1.0.0 directly.
+          if [ -z "${{ steps.tag.outputs.tag }}" ]; then
+            echo "new_tag=v1.0.0" >> $GITHUB_OUTPUT
+            echo "version=1.0.0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          COMMITS=$(git log ${{ steps.tag.outputs.tag }}..HEAD --pretty=format:"%s")
+
+          if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
+            TYPE=major
+          elif echo "$COMMITS" | grep -q "^feat"; then
+            TYPE=minor
+          else
+            TYPE=patch
+          fi
+
+          VERSION=${{ steps.tag.outputs.tag }}
+          VERSION=${VERSION#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          if [ "$TYPE" = "major" ]; then
+            MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0
+          elif [ "$TYPE" = "minor" ]; then
+            MINOR=$((MINOR+1)); PATCH=0
+          else
+            PATCH=$((PATCH+1))
+          fi
+
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "version=$MAJOR.$MINOR.$PATCH" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        run: |
+          if git ls-remote --tags origin ${{ steps.bump.outputs.new_tag }} | grep -q .; then
+            echo "Tag ${{ steps.bump.outputs.new_tag }} already exists, skipping"
+          else
+            git tag ${{ steps.bump.outputs.new_tag }}
+            git push origin ${{ steps.bump.outputs.new_tag }}
+          fi
+
+      - name: Set version for Gradle
+        run: echo "VERSION=${{ steps.bump.outputs.version }}" >> $GITHUB_ENV
+
+      - name: Decode GPG private key
+        run: |
+          echo "GPG_PRIVATE_KEY<<EOF" >> "$GITHUB_ENV"
+          echo "$GPG_PRIVATE_KEY_B64" | base64 -d >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
+
+      - name: Build and publish
+        run: ./gradlew build publish
+
+      - name: Publish to Maven Central
+        run: |
+          TOKEN_B64=$(printf '%s:%s' "$SONATYPE_USERNAME" "$SONATYPE_PASSWORD" | base64 -w0)
+          curl -sS -X POST \
+            -H "Authorization: Bearer $TOKEN_B64" \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.github.daniel99412?publishing_type=automatic"
+
+      - name: Wait for Maven Central validation
+        run: |
+          TOKEN_B64=$(printf '%s:%s' "$SONATYPE_USERNAME" "$SONATYPE_PASSWORD" | base64 -w0)
+          for i in $(seq 1 60); do
+            RESP=$(curl -sS -H "Authorization: Bearer $TOKEN_B64" \
+              "https://central.sonatype.com/api/v1/publisher/deployments?namespace=io.github.daniel99412")
+            if echo "$RESP" | grep -qE '"deploymentState"[[:space:]]*:[[:space:]]*"(PUBLISHING|PUBLISHED)"'; then
+              echo "Maven Central accepted the deployment, publishing in progress"
+              exit 0
+            fi
+            if echo "$RESP" | grep -qE '"deploymentState"[[:space:]]*:[[:space:]]*"(VALIDATION_FAILED|FAILED)"'; then
+              echo "Warning: Maven Central rejected the deployment, this is a Central-side issue:" >&2
+              echo "$RESP" >&2
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Warning: no response from Maven Central after 5 minutes, check https://central.sonatype.com/publishing" >&2
+          exit 0
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.new_tag }}
+          name: Release ${{ steps.bump.outputs.new_tag }}
+          files: build/libs/*.jar
+          generate_release_notes: true
