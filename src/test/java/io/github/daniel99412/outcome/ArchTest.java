@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -48,7 +50,7 @@ class ArchTest {
     }
 
     @Test
-    @DisplayName("Success and Failure are records and implement Outcome")
+    @DisplayName("Problem and Problems are records; Success/Failure are records implementing Outcome")
     void successAndFailureAreRecordsImplementingOutcome() {
         assertTrue(Success.class.isRecord(), "Success must be a record");
         assertTrue(Failure.class.isRecord(), "Failure must be a record");
@@ -57,10 +59,26 @@ class ArchTest {
     }
 
     @Test
-    @DisplayName("Problem is a record and Problems is final")
-    void problemIsRecordAndProblemsIsFinal() {
+    @DisplayName("Problem is a record and Problems is a record")
+    void problemAndProblemsAreRecords() {
         assertTrue(Problem.class.isRecord(), "Problem must be a record");
-        assertTrue(java.lang.reflect.Modifier.isFinal(Problems.class.getModifiers()), "Problems must be final");
+        assertTrue(Problems.class.isRecord(), "Problems must be a record");
+    }
+
+    @Test
+    @DisplayName("Nested functional interfaces are public static and annotated @FunctionalInterface")
+    void nestedFunctionalInterfacesArePublicStatic() {
+        for (Class<?> nested : new Class<?>[]{Outcome.ThrowingSupplier.class, Outcome.TriFunction.class}) {
+            assertTrue(java.lang.reflect.Modifier.isPublic(nested.getModifiers()),
+                    () -> nested.getSimpleName() + " must be public");
+            assertTrue(java.lang.reflect.Modifier.isStatic(nested.getModifiers()),
+                    () -> nested.getSimpleName() + " must be static");
+            assertTrue(nested.isInterface(), () -> nested.getSimpleName() + " must be an interface");
+            assertNotNull(nested.getAnnotation(FunctionalInterface.class),
+                    () -> nested.getSimpleName() + " must be annotated with @FunctionalInterface");
+            assertEquals(1, nested.getDeclaredMethods().length,
+                    () -> nested.getSimpleName() + " must have exactly one abstract method shape");
+        }
     }
 
     @Test
@@ -126,6 +144,8 @@ class ArchTest {
     void publicApiIsLimited() {
         var allowed = java.util.Set.of(
                 Outcome.class.getName(),
+                Outcome.class.getName() + "$ThrowingSupplier",
+                Outcome.class.getName() + "$TriFunction",
                 Success.class.getName(),
                 Failure.class.getName(),
                 Problem.class.getName(),
@@ -135,7 +155,9 @@ class ArchTest {
         for (var clazz : productionClasses) {
             if (clazz.getModifiers().contains(JavaModifier.PUBLIC)) {
                 assertTrue(allowed.contains(clazz.getName()),
-                        "Unexpected public class: " + clazz.getName() + " — public API should be limited to Outcome/Success/Failure/Problem/Problems/ProblemType");
+                        "Unexpected public class: " + clazz.getName()
+                                + " — public API should be limited to Outcome (+ nested functional"
+                                + " interfaces), Success, Failure, Problem, Problems, ProblemType");
             }
         }
     }

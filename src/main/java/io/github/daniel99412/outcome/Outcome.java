@@ -1,14 +1,17 @@
 package io.github.daniel99412.outcome;
 
 import io.github.daniel99412.outcome.problem.Problem;
+import io.github.daniel99412.outcome.problem.ProblemType;
 import io.github.daniel99412.outcome.problem.Problems;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -341,5 +344,273 @@ public sealed interface Outcome<T>
                     mapper.apply(element), "mapper cannot return null"));
         }
         return sequence(outcomes);
+    }
+
+    /**
+     * Runs the given work and captures its result as an {@code Outcome},
+     * converting any thrown {@link Exception} into a {@link Failure} carrying
+     * an internal problem.
+     * <p>
+     * This is the entry point from imperative code that signals failure by
+     * throwing: it is the equivalent of wrapping the call in {@code try/catch}.
+     * Fatal JVM errors ({@link OutOfMemoryError}, {@link StackOverflowError},
+     * {@link java.lang.VirtualMachineError}) are deliberately <em>not</em>
+     * caught; only {@code Exception} is converted.
+     *
+     * @param work the operation to run; must not be null
+     * @param <T>  the type of the produced value
+     * @return a {@code Success} holding the produced value, or a {@code Failure}
+     *         carrying one internal problem whose cause is the exception
+     * @throws NullPointerException if the work is null, or produces null
+     */
+    static <T> Outcome<T> catching(ThrowingSupplier<? extends T> work) {
+        Objects.requireNonNull(work, "work cannot be null");
+        T result;
+        try {
+            result = work.get();
+        } catch (Exception exception) {
+            String message = exception.getMessage();
+            String description =
+                    message == null || message.isBlank()
+                            ? exception.getClass().getName()
+                            : message;
+            return failure(new Problem(
+                    "UNEXPECTED_FAILURE",
+                    description,
+                    ProblemType.INTERNAL,
+                    null,
+                    exception));
+        }
+        return new Success<>(Objects.requireNonNull(result, "work cannot return null"));
+    }
+
+    /**
+     * Runs the given work and captures its result as an {@code Outcome},
+     * converting any thrown {@link Exception} into a {@link Failure} carrying
+     * the problem produced by the given mapper.
+     * <p>
+     * The mapper receives exactly what this method catches: an {@code Exception}.
+     * Fatal JVM errors are never caught and therefore never reach the mapper.
+     *
+     * @param work      the operation to run; must not be null
+     * @param toProblem the function that maps the exception to a problem; must
+     *                  not be null and must not produce null
+     * @param <T>       the type of the produced value
+     * @return a {@code Success} holding the produced value, or a {@code Failure}
+     *         carrying the mapped problem
+     * @throws NullPointerException if the work, the mapper, or the produced problem is null
+     */
+    static <T> Outcome<T> catching(
+            ThrowingSupplier<? extends T> work,
+            Function<? super Exception, ? extends Problem> toProblem) {
+        Objects.requireNonNull(work, "work cannot be null");
+        Objects.requireNonNull(toProblem, "toProblem cannot be null");
+        T result;
+        try {
+            result = work.get();
+        } catch (Exception exception) {
+            return failure(Objects.requireNonNull(
+                    toProblem.apply(exception),
+                    "catching mapper cannot return null"));
+        }
+        return new Success<>(Objects.requireNonNull(result, "work cannot return null"));
+    }
+
+    /**
+     * Guards a {@code Success}: if its value satisfies the predicate, this
+     * {@code Outcome} is returned unchanged; otherwise a {@link Failure}
+     * carrying the supplied problem replaces it. A {@link Failure} is returned
+     * unchanged and neither the predicate nor the supplier is invoked on it.
+     *
+     * @param predicate the condition the success value must satisfy; must not be null
+     * @param problem   the supplier of the problem used when the condition fails;
+     *                  must not be null and must not produce null
+     * @return this {@code Outcome} when the guard holds, or a {@code Failure}
+     *         carrying the supplied problem
+     * @throws NullPointerException if the predicate or supplier is null, or the
+     *                              supplier produces null
+     */
+    default Outcome<T> ensure(
+            Predicate<? super T> predicate,
+            Supplier<? extends Problem> problem) {
+        Objects.requireNonNull(predicate, "ensure predicate cannot be null");
+        Objects.requireNonNull(problem, "ensure problem supplier cannot be null");
+        switch (this) {
+            case Failure<T> ignored -> {
+                return this;
+            }
+            case Success<T> success -> {
+                if (predicate.test(success.value())) {
+                    return this;
+                }
+                return failure(Objects.requireNonNull(problem.get(),
+                        "ensure problem supplier cannot return null"));
+            }
+        }
+    }
+
+    /**
+     * Tries an alternative strategy when this {@code Outcome} is a
+     * {@link Failure}. A {@code Success} is returned unchanged and the fallback
+     * supplier is never evaluated.
+     * <p>
+     * When both this outcome and the fallback are failures, the fallback's
+     * problems fully replace the original ones: {@code otherwise} means "try
+     * another strategy", not "accumulate every strategy". To accumulate problems
+     * use {@link #zip(Outcome, Outcome, BiFunction)}, {@link #sequence(Iterable)}
+     * or {@link #traverse(Iterable, Function)}.
+     *
+     * @param fallback the supplier of the alternative outcome; must not be null
+     *                 and must not produce null; evaluated lazily, only on failure
+     * @return this {@code Outcome} on success, or the outcome produced by the fallback
+     * @throws NullPointerException if the fallback is null, or produces null
+     */
+    default Outcome<T> otherwise(Supplier<? extends Outcome<T>> fallback) {
+        Objects.requireNonNull(fallback, "otherwise fallback cannot be null");
+        if (isSuccess()) {
+            return this;
+        }
+        return Objects.requireNonNull(fallback.get(),
+                "otherwise fallback cannot return null");
+    }
+
+    /**
+     * Combines two outcomes into one, preserving the type of each source.
+     * <p>
+     * If both outcomes are {@link Success}, the result is a {@code Success}
+     * holding the combiner's output. If one or both are {@link Failure}, the
+     * result is a {@code Failure} carrying <em>all</em> problems from <em>all</em>
+     * failures, in order, and the combiner is never executed.
+     *
+     * @param first    the first outcome; must not be null
+     * @param second   the second outcome; must not be null
+     * @param combiner the function combining both values; must not be null and
+     *                 must not produce null
+     * @param <A>      the type of the first value
+     * @param <B>      the type of the second value
+     * @param <R>      the type of the combined value
+     * @return a single {@code Outcome} combining both sources
+     * @throws NullPointerException if any argument is null, or the combiner produces null
+     */
+    static <A, B, R> Outcome<R> zip(
+            Outcome<A> first,
+            Outcome<B> second,
+            BiFunction<? super A, ? super B, ? extends R> combiner) {
+        Objects.requireNonNull(first, "first cannot be null");
+        Objects.requireNonNull(second, "second cannot be null");
+        Objects.requireNonNull(combiner, "combiner cannot be null");
+
+        List<Problem> problems = new ArrayList<>();
+        A firstValue = collect(first, problems);
+        B secondValue = collect(second, problems);
+
+        if (!problems.isEmpty()) {
+            return new Failure<>(new Problems(problems));
+        }
+        R combined = Objects.requireNonNull(combiner.apply(firstValue, secondValue),
+                "zip combiner cannot return null");
+        return new Success<>(combined);
+    }
+
+    /**
+     * Combines three outcomes into one, preserving the type of each source.
+     * The semantics are identical to {@link #zip(Outcome, Outcome, BiFunction)}:
+     * all successes combine their values, any failure accumulates every problem
+     * from every failed source and skips the combiner.
+     *
+     * @param first    the first outcome; must not be null
+     * @param second   the second outcome; must not be null
+     * @param third    the third outcome; must not be null
+     * @param combiner the function combining the three values; must not be null
+     *                 and must not produce null
+     * @param <A>      the type of the first value
+     * @param <B>      the type of the second value
+     * @param <C>      the type of the third value
+     * @param <R>      the type of the combined value
+     * @return a single {@code Outcome} combining all three sources
+     * @throws NullPointerException if any argument is null, or the combiner produces null
+     */
+    static <A, B, C, R> Outcome<R> zip(
+            Outcome<A> first,
+            Outcome<B> second,
+            Outcome<C> third,
+            TriFunction<? super A, ? super B, ? super C, ? extends R> combiner) {
+        Objects.requireNonNull(first, "first cannot be null");
+        Objects.requireNonNull(second, "second cannot be null");
+        Objects.requireNonNull(third, "third cannot be null");
+        Objects.requireNonNull(combiner, "combiner cannot be null");
+
+        List<Problem> problems = new ArrayList<>();
+        A firstValue = collect(first, problems);
+        B secondValue = collect(second, problems);
+        C thirdValue = collect(third, problems);
+
+        if (!problems.isEmpty()) {
+            return new Failure<>(new Problems(problems));
+        }
+        R combined = Objects.requireNonNull(
+                combiner.apply(firstValue, secondValue, thirdValue),
+                "zip combiner cannot return null");
+        return new Success<>(combined);
+    }
+
+    /**
+     * Returns the value of a success, or records every problem of a failure
+     * into the sink and returns null. Package-private helper for {@code zip}.
+     */
+    private static <T> T collect(Outcome<T> outcome, List<Problem> sink) {
+        return switch (outcome) {
+            case Success<T> success -> success.value();
+            case Failure<T> failure -> {
+                for (Problem problem : failure.problems()) {
+                    sink.add(problem);
+                }
+                yield null;
+            }
+        };
+    }
+
+    /**
+     * A supplier whose operation may throw a checked exception. It lets
+     * {@link #catching(ThrowingSupplier)} lift imperative, exception-throwing
+     * code into an {@code Outcome} without manual wrapping. An ordinary
+     * non-throwing lambda also conforms to this interface.
+     *
+     * @param <T> the type of the produced value
+     */
+    @FunctionalInterface
+    interface ThrowingSupplier<T> {
+
+        /**
+         * Produces a value, possibly throwing a checked exception.
+         *
+         * @return the produced value; must not be null
+         * @throws Exception if the operation fails
+         */
+        T get() throws Exception;
+    }
+
+    /**
+     * A function of three arguments. Java's standard library only provides
+     * {@link Function} and {@link BiFunction}; this interface exists solely to
+     * support the three-source overload of {@link #zip}.
+     *
+     * @param <A> the type of the first argument
+     * @param <B> the type of the second argument
+     * @param <C> the type of the third argument
+     * @param <R> the type of the result
+     */
+    @FunctionalInterface
+    interface TriFunction<A, B, C, R> {
+
+        /**
+         * Applies this function to the given arguments.
+         *
+         * @param a the first argument
+         * @param b the second argument
+         * @param c the third argument
+         * @return the function result; must not be null where the caller requires it
+         */
+        R apply(A a, B b, C c);
     }
 }

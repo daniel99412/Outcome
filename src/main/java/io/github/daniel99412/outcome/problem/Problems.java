@@ -4,7 +4,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
-import java.util.stream.StreamSupport;
 
 /**
  * An immutable, ordered snapshot of one or more {@link Problem}s.
@@ -12,28 +11,36 @@ import java.util.stream.StreamSupport;
  * {@code Problems} guarantees the invariants of this library: it is never null,
  * always contains at least one problem, preserves insertion order, does not
  * deduplicate problems and never exposes a mutable collection.
+ *
+ * @param problems the contained problems, in insertion order; never null, never empty
  */
-public final class Problems implements Iterable<Problem> {
-    private final List<Problem> problems;
+public record Problems(List<Problem> problems) implements Iterable<Problem> {
 
     /**
      * Creates an immutable snapshot of the given problems.
      *
-     * @param problems the problems to wrap
-     * @throws NullPointerException     if the collection or any of its elements is null
-     * @throws IllegalArgumentException if the collection is empty
+     * @param problems the problems to wrap; must not be null, must not be empty,
+     *                 and must not contain null elements
+     * @throws NullPointerException     if the list is null or contains null elements
+     * @throws IllegalArgumentException if the list is empty
      */
-    public Problems(Iterable<Problem> problems) {
+    public Problems {
         Objects.requireNonNull(problems, "problems cannot be null");
+        problems = List.copyOf(problems);
 
-        this.problems = StreamSupport
-                .stream(problems.spliterator(), false)
-                .map(Objects::requireNonNull)
-                .toList();
-
-        if (this.problems.isEmpty()) {
+        if (problems.isEmpty()) {
             throw new IllegalArgumentException("problems cannot be empty");
         }
+    }
+
+    /**
+     * Iterates over the contained problems in insertion order.
+     *
+     * @return an iterator over the problems
+     */
+    @Override
+    public Iterator<Problem> iterator() {
+        return problems.iterator();
     }
 
     /**
@@ -46,11 +53,10 @@ public final class Problems implements Iterable<Problem> {
      */
     public Problems map(Function<? super Problem, ? extends Problem> mapper) {
         Objects.requireNonNull(mapper, "mapper cannot be null");
-        List<Problem> mapped = problems.stream()
+        return new Problems(problems.stream()
                 .map(mapper)
-                .map(Objects::requireNonNull)
-                .toList();
-        return new Problems(mapped);
+                .map(problem -> Objects.requireNonNull(problem, "mapper cannot return null"))
+                .toList());
     }
 
     /**
@@ -94,34 +100,45 @@ public final class Problems implements Iterable<Problem> {
     }
 
     /**
-     * Iterates over the contained problems in insertion order.
+     * Checks whether any contained problem has the given code.
      *
-     * @return an iterator over the problems
+     * @param code the code to look for; must not be null
+     * @return {@code true} if at least one problem carries the code
+     * @throws NullPointerException if the code is null
      */
-    @Override
-    public Iterator<Problem> iterator() {
-        return problems.iterator();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Problems other)) return false;
-        return problems.equals(other.problems);
-    }
-
-    @Override
-    public int hashCode() {
-        return problems.hashCode();
+    public boolean hasCode(String code) {
+        Objects.requireNonNull(code, "code cannot be null");
+        return problems.stream().anyMatch(problem -> problem.code().equals(code));
     }
 
     /**
-     * Returns a string representation listing the contained problems.
+     * Returns every problem carrying the given code, in insertion order.
+     * Multiple problems may share a code; the returned list is immutable and
+     * may be empty.
      *
-     * @return a string representation
+     * @param code the code to look for; must not be null
+     * @return an immutable list of matching problems, possibly empty
+     * @throws NullPointerException if the code is null
      */
-    @Override
-    public String toString() {
-        return "Problems" + problems;
+    public List<Problem> byCode(String code) {
+        Objects.requireNonNull(code, "code cannot be null");
+        return problems.stream()
+                .filter(problem -> problem.code().equals(code))
+                .toList();
+    }
+
+    /**
+     * Returns every problem of the given type, in insertion order. The returned
+     * list is immutable and may be empty.
+     *
+     * @param type the type to look for; must not be null
+     * @return an immutable list of matching problems, possibly empty
+     * @throws NullPointerException if the type is null
+     */
+    public List<Problem> byType(ProblemType type) {
+        Objects.requireNonNull(type, "type cannot be null");
+        return problems.stream()
+                .filter(problem -> problem.type() == type)
+                .toList();
     }
 }

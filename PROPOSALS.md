@@ -3,6 +3,11 @@
 Análisis del estado actual de la librería y propuestas priorizadas para
 fortalecer la API sin romper la filosofía *deliberately small*.
 
+> **Estado (2026-08):** las secciones 1, 2, 3, 4 y 5 están implementadas.
+> El detalle final, con los ajustes de la revisión externa
+> (`OUTCOME_API_PLAN_REVIEW.md`), quedó documentado en `API_PLAN.md`.
+> Este documento se conserva como registro histórico del análisis.
+
 ---
 
 ## Estado actual

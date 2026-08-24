@@ -67,10 +67,9 @@ class ProblemsComprehensiveTest {
         }
 
         @Test
-        void acceptsAnyIterableNotJustList() {
-            Iterable<Problem> iterable = () -> Arrays.asList(err("A"), err("B")).iterator();
-            Problems e = new Problems(iterable);
-            assertEquals(2, e.size());
+        void acceptsDifferentListImplementations() {
+            assertEquals(2, new Problems(new ArrayList<>(Arrays.asList(err("A"), err("B")))).size());
+            assertEquals(2, new Problems(Arrays.asList(err("A"), err("B"))).size());
         }
 
         @Test

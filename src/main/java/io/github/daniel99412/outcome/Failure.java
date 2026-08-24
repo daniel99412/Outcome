@@ -77,13 +77,14 @@ public record Failure<T>(Problems problems) implements Outcome<T> {
     public Outcome<T> recover(Function<? super Problems, ? extends T> recovery) {
         Objects.requireNonNull(recovery, "recovery cannot be null");
         T recovered = recovery.apply(problems);
-        return new Success<>(Objects.requireNonNull(recovered, "recovery cannot return null"));
+        return new Success<>(Objects.requireNonNull(
+                recovered, "recover recovery cannot return null"));
     }
 
     @Override
     public Outcome<T> recoverWith(Function<? super Problems, ? extends Outcome<T>> recovery) {
         Objects.requireNonNull(recovery, "recovery cannot be null");
         Outcome<T> recovered = recovery.apply(problems);
-        return Objects.requireNonNull(recovered, "recovery cannot return null");
+        return Objects.requireNonNull(recovered, "recoverWith recovery cannot return null");
     }
 }
