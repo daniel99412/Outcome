@@ -273,3 +273,7 @@ Problem enriched = Problem.timeout("DB_TIMEOUT", "slow")
 ./gradlew build
 ./gradlew test
 ```
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
